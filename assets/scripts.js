@@ -5468,7 +5468,7 @@ pattern.test( name )
 );
 };
 /** @ngInject */
-function Directive( $rootScope, $timeout, screenService, sessionService, userPreferenceService, modelEvents, _, errorLogService, boardService, utilityService, analyticsService, config ) {
+function Directive( $rootScope, $timeout, screenService, sessionService, userPreferenceService, modelEvents, _, errorLogService, boardService, utilityService, analyticsService, config, clientEvents ) {
 var maxInBytes = 10485760;
 var _projectID;
 var _uploadType = "screen";
@@ -5552,9 +5552,9 @@ setTimeout(function() {
 uploader.trigger( "FilesAdded", filesToAdd );
 }, 1);
 });
-scope.$on('globalUploadAddScreens', function(e, files, suggestedSort, dividerID, projectID) {
+scope.$on("globalUploadAddScreens", function(e, files, suggestedSort, dividerID, projectID) {
 _uploadType = "screen";
-_uploadSource = "screens_tab"
+_uploadSource = "screens_tab";
 _projectID = projectID;
 var filesToAdd = [];
 for ( var i = ( files.length - 1 ) ; i >= 0 ; i-- ) {
@@ -5700,6 +5700,12 @@ _removeInvalidFiles(up, files);
 if ( files.length === 0 ) {
 return;
 }
+clientEvents.forNamespace("globalUploader")
+.trigger("filesAdded", {
+type: _uploadType,
+source: _uploadSource
+}
+);
 var user = sessionService.user;
 scope.$apply(function(){
 if(!$rootScope.globalUploadInfo.upload.files.length){
@@ -7647,7 +7653,6 @@ ng
 function appSettings( $location, _, sessionService, config ) {
 var launchDarklyFeatureFlags = [
 "enableMyNotifications",
-"mentions",
 "mentionShortcut",
 "projectNotificationPreferences",
 "shareCommentingLogin"
@@ -7656,7 +7661,6 @@ var settings = {
 debug: false,
 notifications: [],
 features: {
-mentions: false,
 tfa: false,
 sessionInactivity: false
 }
@@ -7697,12 +7701,11 @@ function setFeatureFlag( flagName, flagValue) {
 settings.features[flagName] = flagValue;
 }
 function getSettings() {
-if ( ! settings.debug && isInVisionAppUser ) {
+if ( !settings.debug && isInVisionAppUser ) {
 settings.features.inbox = true;
 settings.features.scheduledLiveShare = true;
 settings.features.boardsSelectiveSync = true;
 }
-settings.features.mentions = !!settings.features.mentions;
 return settings;
 }
 }
@@ -8607,7 +8610,6 @@ userTesting: false,
 boards: false,
 workflowDetails: false,
 inbox: false,
-mentions: false,
 motion: false
 }
 };
@@ -11304,13 +11306,12 @@ restrict: "A",
 templateUrl: "/assets/apps/common/ng-components/comment/comment.directive.htm",
 link: linkFunction,
 scope: {
-comment: "=comment",  					// current comment
+comment: "=comment", 	// current comment
 conversation: "=conversation",  // previous comments [0..N]
 screenId: "=screenId",
 boardId: "=boardId",
 hasEmojis: "@hasEmojis",  							// dis/enable emojis
 hasWhoIsNotified: "@hasWhoIsNotified", 	// dis/enable who-is-notified directive
-hasMentions: "@hasMentions",								// dis/enable mentions
 hasMentionShortcut: "@hasMentionShortcut",	// dis/enable shorcuts (@project, @conversation)
 onAddComment: "&?onAddComment",
 onExitComment: "&?onExitComment",
@@ -11438,7 +11439,7 @@ extracted.push( {
 index: startPos,
 html: mentionHTML,
 css: className,
-text: mentionText 
+text: mentionText
 } );
 }
 }
@@ -11585,11 +11586,7 @@ sessionService
 ) {
 var vm = this;
 var props = $scope.props = $scope;
-vm.isEnabled = appSettings.getSettings().features.mentions;
 var isProjectNotificationEnabled = appSettings.getSettings().features.projectNotificationPreferences;
-if ( ! vm.isEnabled ) {
-return;
-}
 $scope.$watch( "isShown", handleIsShown );
 $scope.$watch( "conversation", handleConversationChange );
 $scope.$on( "$destroy", handleDestroy );
@@ -11727,28 +11724,28 @@ projectId: "=projectId"
 /*! emoji-add-menu.directive.js */ 
 ;
 ;
-(function( ng ) {
+(function (ng) {
 "use strict";
 ng
 .module("InVision")
-.directive( "invEmojiAddMenu", Directive );
+.directive("invEmojiAddMenu", Directive);
 function Directive(
 $window,
 $document,
 emojiService,
 appSettings
 ) {
-return({
+return ({
 link: linkFunction,
 restrict: "A",
 replace: true,
 templateUrl: "/assets/apps/common/ng-components/emoji/emoji-add-menu.directive.htm"
 });
-function linkFunction( scope, element ) {
+function linkFunction(scope, element) {
 var menuObj = {
 width: 320,
 height: 335,
-topLimit: 400  // limit to either show the menu above or beneath the emoji-add icon 
+topLimit: 400 // limit to either show the menu above or beneath the emoji-add icon
 };
 var ESC = 27;
 var textarea = null;
@@ -11756,83 +11753,78 @@ var addEmojiElement = null;
 var emojiContainer = element.find(".emojis");
 var emojiIcon = ".emoji-icon";
 var emojiAttr = "data-emoji";
-var mentionEnabled = appSettings.getSettings().features.mentions;
 var isModal = element.closest(".modal").length > 0 || element.closest(".m-inbox-conversation").length || element.closest(".m-inbox-board-item").length;
 var emojiPlaceholder = element.closest(".emoji-root").find(".emoji-placeholder");
-var appendTo = ( emojiPlaceholder.length > 0 ) ? emojiPlaceholder : $document.find( "body" );
-scope.$on( "emoji:toggle", handleToggle );
-$document.on( "keydown", keyboardEvents );
-angular.element( $window ).on("click",  handleClickOutside );
+var appendTo = (emojiPlaceholder.length > 0) ? emojiPlaceholder : $document.find("body");
+scope.$on("emoji:toggle", handleToggle);
+$document.on("keydown", keyboardEvents);
+angular.element($window).on("click", handleClickOutside);
 init();
 function init() {
 scope.tabs = emojiService.getCategories();
 scope.activeTab = {
 "idx": 0,
-"tab": scope.tabs[ 0 ]
+"tab": scope.tabs[0]
 };
 scope.emojis = emojiService.getEmojis();
 scope.hoverEmoji = null;
 }
-scope.setTab = function( index ) {
+scope.setTab = function (index) {
 scope.activeTab.idx = index;
-scope.activeTab.tab = scope.tabs[ index ];
+scope.activeTab.tab = scope.tabs[index];
 };
-emojiContainer.on("click", emojiIcon, function( e ) {
+emojiContainer.on("click", emojiIcon, function(e) {
 textarea = addEmojiElement.closest(".post-emojis").find("textarea").val(); // can't cache it, enabled with ng-if
-if ( mentionEnabled ) {
-scope.$emit("emoji:add", textarea, this.getAttribute( emojiAttr ), scope.commentTarget ); 
-} else {
-scope.$emit("$selectEmoji", textarea, this.getAttribute( emojiAttr ), scope.commentTarget );
-}
+scope.$emit("emoji:add", textarea, this.getAttribute( emojiAttr ), scope.commentTarget );
 scope.isOpen = false;
 scope.$apply();
 });
-emojiContainer.on("mouseenter", emojiIcon, function( e ) {
-scope.hoverEmoji = this.getAttribute( emojiAttr );
+emojiContainer.on("mouseenter", emojiIcon, function (e) {
+scope.hoverEmoji = this.getAttribute(emojiAttr);
 scope.$digest();
 });
-emojiContainer.on("mouseleave", emojiIcon, function( e ) {
+emojiContainer.on("mouseleave", emojiIcon, function (e) {
 scope.hoverEmoji = null;
 scope.$digest();
 });
-function keyboardEvents( event ) {
+function keyboardEvents(event) {
 var keyCode = event.which || event.keyCode;
-if ( keyCode !== ESC ) {
+if (keyCode !== ESC) {
 return;
 }
-if ( ! scope.isOpen ) {
-emojiService.setPopover( false );
+if (!scope.isOpen) {
+emojiService.setPopover(false);
 }
 scope.isOpen = false;
 scope.$digest();
 }
-function handleToggle( event, isOpen, addEmojiElm ) {
+function handleToggle(event, isOpen, addEmojiElm) {
 addEmojiElement = addEmojiElm;
-if ( ! isOpen ) {
+if (!isOpen) {
 return;
 }
-emojiService.setPopover( true );
-emojiService.setPopoverOnModal( true );
-appendTo.append( element );
-var addEmojiIconCoords = emojiService.getElementBoundingCoords( addEmojiElement[ 0 ] );
-var appendToCoords = emojiService.getElementBoundingCoords( appendTo[ 0 ] );
-var top = ( addEmojiIconCoords.top - appendToCoords.top ) - ( menuObj.height + menuObj.height * 0.1 );
-var left = ( addEmojiIconCoords.left - appendToCoords.left ) + menuObj.width / 2;
-if ( addEmojiIconCoords.top < menuObj.topLimit ) {
+emojiService.setPopover(true);
+emojiService.setPopoverOnModal(true);
+appendTo.append(element);
+var addEmojiIconCoords = emojiService.getElementBoundingCoords(addEmojiElement[0]);
+var appendToCoords = emojiService.getElementBoundingCoords(appendTo[0]);
+var top = (addEmojiIconCoords.top - appendToCoords.top) - (menuObj.height + menuObj.height * 0.1);
+var left = (addEmojiIconCoords.left - appendToCoords.left) + menuObj.width / 2;
+if (addEmojiIconCoords.top < menuObj.topLimit) {
 top = addEmojiIconCoords.top - appendToCoords.top;
 }
 element.css({
 top: top,
 left: left
 });
-if ( isModal ) {
+if (isModal) {
 element.css({
 zIndex: 1051
 });
 }
 }
-function handleClickOutside( event ) {
-if ( addEmojiElement && ( addEmojiElement[ 0 ].contains( event.target ) || element[ 0 ].contains( event.target ) ) ) {
+function handleClickOutside(event) {
+if (addEmojiElement && (addEmojiElement[0].contains(event.target) || element[0].contains(event.target))) {
 return;
 }
 scope.isOpen = false;
@@ -11840,18 +11832,18 @@ scope.$digest();
 }
 scope.$on(
 "$destroy",
-function() {
-emojiService.setPopover( false );
-emojiService.setPopoverOnModal( false );
-$( emojiContainer ).off("click mouseenter mouseleave");
-angular.element( $window ).off("click", handleClickOutside);
-$document.off( "keydown", keyboardEvents );
+function () {
+emojiService.setPopover(false);
+emojiService.setPopoverOnModal(false);
+$(emojiContainer).off("click mouseenter mouseleave");
+angular.element($window).off("click", handleClickOutside);
+$document.off("keydown", keyboardEvents);
 element.remove();
 }
 );
 }
 }
-})( angular );
+})(angular);
 ;
 ;
 /*! emoji-add.directive.js */ 
@@ -12055,20 +12047,18 @@ return coordinates;
 "use strict";
 app.directive( "invEmojiText", EmojiTextDirective );
 function EmojiTextDirective( emojiService ) {
-return({
+return ({
 link: linkFunction,
 restrict: "A"
 });
-function linkFunction( $scope, element ) {
-$scope.$on("$selectEmoji", addEmoji ); // mentions OFF
-$scope.$on("emoji:add", addEmoji );	// mentions ON
-$scope.$on("$typeaheadEmoji", typeaheadEmoji ); // mentions OFF
-$scope.$on("emoji:typeahead", typeaheadEmoji ); // mentions ON
+function linkFunction( $scope ) {
+$scope.$on("emoji:add", addEmoji );
+$scope.$on("emoji:typeahead", typeaheadEmoji );
 function addEmoji( event, commentVal, emoji ) {
 var emojiItem = ":" + emoji + ": ";
 $scope.comment = commentVal + emojiItem; // updates the comment model
 }
-function typeaheadEmoji( event, emoji, caretPos, target ) {
+function typeaheadEmoji( event, emoji, caretPos ) {
 var comment = "";
 comment = emojiService.splitEmoji( $scope.comment, caretPos );
 $scope.comment = comment.before + comment.colon + emoji + ": " + comment.after;
@@ -12133,7 +12123,6 @@ $scope.isBrowsing = false;
 $scope.comment = "";
 emojiService.setTypeahead( false );
 emojiService.setTypeaheadOnModal( false );
-mentionEnabled = appSettings.getSettings().features.mentions;
 if ( !textarea ) {
 throw new Error("Textarea not available. Please provide one");
 }
@@ -12216,11 +12205,7 @@ function emitEmoji() {
 if ( typeof $scope.items[ $scope.current ] === "undefined" ) {
 return;
 }
-if ( mentionEnabled ) {
 $scope.$emit("emoji:typeahead", $scope.items[ $scope.current ].label, caretPos );
-} else {
-$scope.$emit("$typeaheadEmoji", $scope.items[ $scope.current ].label, caretPos, $scope.commentTarget);
-}
 $scope.$apply();
 }
 function browseEmoji() {
@@ -12988,10 +12973,6 @@ vm.selectPerson = selectPerson;
 vm.addMention = addMention;
 initialize();
 function initialize() {
-var isEnabled = appSettings.getSettings().features.mentions;
-if ( ! isEnabled ) {
-return;
-}
 candidatesPartial.load();
 }
 /**
@@ -15097,12 +15078,7 @@ _,
 appSettings,
 mentionService
 ) {
-var vm = this;
 var props = $scope.props = $scope;
-vm.isEnabled = appSettings.getSettings().features.mentions && $attrs.hasMentions;
-if ( ! vm.isEnabled ) {
-return;
-}
 props.query = function( mentionInfo ) {
 var remoteScope = props.triggerCharMap[mentionInfo.mentionTriggerChar];
 if ( props.trimTerm === undefined || props.trimTerm ) {
@@ -15116,7 +15092,7 @@ remoteScope.typedTerm = mentionInfo.mentionText;
 };
 props.defaultSearch = function( mentionInfo ) {
 var results = [];
-var term = mentionInfo.mentionText || '';
+var term = mentionInfo.mentionText || "";
 var itNeedsToBeReplaced;
 _.forEach( props.items, function( item ) {
 var text = item.name.toUpperCase() + item.surname.toUpperCase();
@@ -15273,7 +15249,6 @@ typedTerm: "=mentioTypedTerm",
 requireLeadingSpace: "=mentioRequireLeadingSpace",
 trimTerm: "=mentioTrimTerm",
 hasWhoIsNotified: "@hasWhoIsNotified",
-hasMentions: "@hasMentions",
 hasMentionShortcut: "@hasMentionShortcut"
 },
 link: linkFunction
@@ -15282,9 +15257,6 @@ function linkFunction( scope, element, attrs, controller ) {
 scope.triggerCharMap = {};
 scope.targetElement = element;
 attrs.$set("autocomplete", "off");
-if ( ! controller.isEnabled ) {
-return;
-}
 var mentions = "";
 var pendingMentionsUpdate = null;
 var hasExistingMentions = false;
@@ -15436,10 +15408,6 @@ modelEvents
 ) {
 var vm = this;
 var props = $scope.props = $scope;
-vm.isEnabled = appSettings.getSettings().features.mentions;
-if ( ! vm.isEnabled ) {
-return;
-}
 modelEvents.on( "MentionStorageUpdated", handleMentionStorageUpdated );
 $scope.$on( "$destroy", handleDestroy );
 initialize();
@@ -15741,17 +15709,14 @@ analyticsService.segmentIo();
 analyticsService.googleAnalytics();
 analyticsService.track("ShareLink.Viewed");
 var enableInbox = false;
-var enableMentions = false;
 var enableMentionShortcut = false;
 var shareCommentingLogin = false;
 if ( config && config.featureFlags ) {
 enableInbox = !!config.featureFlags.enableInbox;
-enableMentions = !!config.featureFlags.enableMentions;
 enableMentionShortcut = !!config.featureFlags.mentionShortcut;
 shareCommentingLogin = !!config.featureFlags.shareCommentingLogin;
 }
 appSettings.setFeatureFlag("inbox", enableInbox);
-appSettings.setFeatureFlag("mentions", enableMentions);
 appSettings.setFeatureFlag("mentionShortcut", enableMentionShortcut);
 appSettings.setFeatureFlag("shareCommentingLogin", shareCommentingLogin);
 $scope.settings = appSettings.getSettings();
@@ -16648,6 +16613,21 @@ $scope.startSketchBuilder = function(){
 $scope.isShowingSketchBuilder = true;
 $scope.isBottomBarShown = false;
 $scope.$emit("isShowingSketchBuilder", true);
+};
+$scope.getMarkerPos = function(conversation, displayScale) {
+var markerPos = {
+top: conversation.y * displayScale,
+left: conversation.x * displayScale
+};
+return markerPos;
+};
+$scope.getScreenDisplayData = function(screen) {
+var displayData = {
+height: screen.height,
+width: screen.width,
+displayScale: screen.displayScale
+};
+return displayData;
 };
 $scope.hideSketchBuilder = function(){
 $scope.isShowingSketchBuilder = false;
@@ -20767,34 +20747,72 @@ app.directive( "invHistoryOverlay", Directive );
 /** @ngInject */
 function Directive( _, $timeout ) {
 var linkFunction = function( $scope, element, attributes ) {
-var $window = $(window),
-$comment = element.parent(),
-$icon = $comment.find(".view-history"),
-$thumbnail = element.find("img"),
-$buttons = element.find("a"),
-timer;
-$icon.on("mouseenter.history.overlay", function() {
-timer = $timeout(function(){
-if ( ( element.offset().top - $window.scrollTop() ) <= 47 ) {
-element.addClass("flip");
+var $window = $(window);
+var $body = $("body");
+var timer;
+var screenData = JSON.parse(attributes.overlayScreenData);
+var markerPos = JSON.parse(attributes.overlayMarkerPos);
+var elPos = getElementBoundingCoords(element[0]);
+var $screenImage = 	$("<div class='history-overlay'>" +
+"<div class='history-overlay-image-container'>" +
+"<img src='" + attributes.overlayImage + "'>" +
+"</div></div>");
+var $img = $screenImage.find("img");
+var $commentContainer = element.closest(".comment-content");
+var imageStyle = {
+top: -elPos.top + (elPos.top - markerPos.top) + 135,
+left: -elPos.left + (elPos.left - markerPos.left) + 275,
+height: screenData.height * screenData.displayScale,
+width: screenData.width * screenData.displayScale
 };
+$img.css(imageStyle);
+element.on("mouseenter.history-overlay", function() {
+var toolDiff = (3 - element.closest(".comment-item-options__tools").children("li:visible").length) * 29;
+var containerStyle = {
+top: elPos.top - $commentContainer.scrollTop(),
+left: elPos.left + toolDiff
+};
+$screenImage.css(containerStyle);
+$body.append($screenImage);
+timer = $timeout(function() {
+if ( ( $screenImage.offset().top - $window.scrollTop() ) <= 47 ) {
+$screenImage.addClass("flip");
+}
 }, 1);
-element.stop().fadeIn(250);
+$screenImage.stop().fadeIn(250);
 });
-$comment.on("mouseleave.history-overlay", function() {
-if ( element.is("hover") ) {
-return;
-};
-element.stop().fadeOut(250, function() {
-element.removeClass("flip");
+element.on("mouseleave.history-overlay", function() {
+$screenImage.stop().fadeOut(250, function() {
+$screenImage.remove();
+$screenImage.removeClass("flip");
 });
 });
-$scope.$on( "$destroy", function(){
-$icon.unbind("mouseenter.history-overlay");
-$comment.unbind("mouseleave.history-overlay");
-$buttons.unbind("click.history-overlay");
+$scope.$on( "$destroy", function() {
+element.unbind("mouseenter.history-overlay");
+element.unbind("mouseleave.history-overlay");
 $timeout.cancel( timer );
 } );
+function getElementBoundingCoords( el ) {
+var coordinates = { top: 0, left: 0 };
+var obj = el;
+var body = document.body;
+while ( obj ) {
+coordinates.left += obj.offsetLeft + obj.clientLeft;
+coordinates.top += obj.offsetTop + obj.clientTop;
+obj = obj.offsetParent;
+}
+obj = el;
+while ( obj !== body ) {
+if ( obj && obj.scrollTop && obj.scrollTop > 0 ) {
+coordinates.top -= obj.scrollTop;
+}
+if ( obj && obj.scrollLeft && obj.scrollLeft > 0 ) {
+coordinates.left -= obj.scrollLeft;
+}
+obj = obj.parentNode;
+}
+return coordinates;
+}
 };
 return({
 link: linkFunction

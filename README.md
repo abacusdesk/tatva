@@ -1,2 +1,0 @@
-# tatva
-Tatva Website Prototype
